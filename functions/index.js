@@ -10,7 +10,7 @@ const functions = require('firebase-functions');
 const firebaseAdmin = require('firebase-admin');
 // you should manually put your service-account.json in the same folder app.js
 // is located at.
-const serviceAccount = require('./service_account.json');
+const serviceAccount = require('./manbocash-7aa7e-firebase-adminsdk-4jmw8-ae343e992a.json');
 
 // Kakao API request url to retrieve user profile based on access token
 const requestMeUrl = 'https://kapi.kakao.com/v2/user/me';
@@ -19,6 +19,8 @@ const requestMeUrl = 'https://kapi.kakao.com/v2/user/me';
 firebaseAdmin.initializeApp({
   credential: firebaseAdmin.credential.cert(serviceAccount),
 });
+
+const memberRef = firebaseAdmin.firestore().collection('members');
 
 
 /**
@@ -31,7 +33,7 @@ function requestMe(kakaoAccessToken) {
   console.log('Requesting user profile from Kakao API server.');
   return request({
     method: 'GET',
-    headers: {'Authorization': 'Bearer ' + kakaoAccessToken},
+    headers: { 'Authorization': 'Bearer ' + kakaoAccessToken },
     url: requestMeUrl,
   });
 };
@@ -63,16 +65,16 @@ function updateOrCreateUser(userId, email, displayName, photoURL) {
   }
   console.log(updateParams);
   return firebaseAdmin.auth().updateUser(userId, updateParams)
-  .catch((error) => {
-    if (error.code === 'auth/user-not-found') {
-      updateParams['uid'] = userId;
-      if (email) {
-        updateParams['email'] = email;
+    .catch((error) => {
+      if (error.code === 'auth/user-not-found') {
+        updateParams['uid'] = userId;
+        if (email) {
+          updateParams['email'] = email;
+        }
+        return firebaseAdmin.auth().createUser(updateParams);
       }
-      return firebaseAdmin.auth().createUser(updateParams);
-    }
-    throw error;
-  });
+      throw error;
+    });
 };
 
 
@@ -89,7 +91,7 @@ function createFirebaseToken(kakaoAccessToken) {
     const userId = `kakao:${body.id}`;
     if (!userId) {
       return res.status(404)
-      .send({message: 'There was no user with the given access token.'});
+        .send({ message: 'There was no user with the given access token.' });
     }
     let nickname = null;
     let profileImage = null;
@@ -102,7 +104,7 @@ function createFirebaseToken(kakaoAccessToken) {
   }).then((userRecord) => {
     const userId = userRecord.uid;
     console.log(`creating a custom firebase token based on uid ${userId}`);
-    return firebaseAdmin.auth().createCustomToken(userId, {provider: 'KAKAO'});
+    return firebaseAdmin.auth().createCustomToken(userId, { provider: 'KAKAO' });
   });
 };
 
@@ -119,16 +121,53 @@ app.use(bodyParser.json());
 // actual endpoint that creates a firebase token with Kakao access token
 app.post('/', (req, res) => {
   const token = req.body.token;
-  if (!token) return res.status(400).send({error: 'There is no token.'})
-  .send({message: 'Access token is a required parameter.'});
+  if (!token) return res.status(400).send({ error: 'There is no token.' })
+    .send({ message: 'Access token is a required parameter.' });
 
   console.log(`Verifying Kakao token: ${token}`);
 
   createFirebaseToken(token).then((firebaseToken) => {
     console.log(`Returning firebase token to user: ${firebaseToken}`);
-    res.send({firebase_token: firebaseToken});
+    res.send({ firebase_token: firebaseToken });
   });
 });
 
- 
+
 exports.verifyToken = functions.https.onRequest(app);
+
+
+/*
+* 이메일 중복체크 /checkemail?email=.....
+*/
+exports.checkemail = functions.https.onRequest(async (req, res) => {
+
+  const snapshot = await memberRef.doc(req.query.email).get();
+  console.log('snapshot.exists: ' + snapshot.exists);
+  if (snapshot.exists) {
+    res.status(200).send({ result: '중복' });
+  } else {
+    res.status(200).send({ result: '중복아님' });
+  }
+
+  /*
+  const snapshot = await memberRef.where('email', '==', req.query.email).get();
+  if (snapshot.empty) {
+    res.status(200).send({ result: '중복아님' });
+  } else {
+    res.status(200).send({ result: '중복' });
+  }
+  */
+});
+
+
+/*
+* 추천인 중복체크 /checkreferee?referee=.....
+*/
+exports.checkreferee = functions.https.onRequest(async (req, res) => {
+  const snapshot = await memberRef.where('referCode', '==', req.query.referee).get();
+  if (snapshot.empty) {
+    res.status(200).send({ result: '중복아님' });
+  } else {
+    res.status(200).send({ result: '중복' });
+  }
+});

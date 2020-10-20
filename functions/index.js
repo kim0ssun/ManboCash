@@ -54,6 +54,7 @@ function updateOrCreateUser(userId, email, displayName, photoURL) {
   const updateParams = {
     provider: 'KAKAO',
     displayName: displayName,
+    email: email,
   };
   if (displayName) {
     updateParams['displayName'] = displayName;
@@ -87,7 +88,7 @@ function updateOrCreateUser(userId, email, displayName, photoURL) {
 function createFirebaseToken(kakaoAccessToken) {
   return requestMe(kakaoAccessToken).then((response) => {
     const body = JSON.parse(response);
-    console.log(body);
+    console.log("createFirebaseToken(kakaoAccessToken) body: " + body);
     const userId = `kakao:${body.id}`;
     if (!userId) {
       return res.status(404)
